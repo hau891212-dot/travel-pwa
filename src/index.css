@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-bg: #F7F4EB;
+  --color-brand-blue: #4BA3E3;
+  --color-brand-green: #78B394;
+  --color-brand-yellow: #F9E58B;
+  --color-brand-text: #4A8B82;
+  --color-brand-brown: #8D775F;
+  --radius-4xl: 2rem;
+}
+
+body {
+  background-color: var(--color-brand-bg);
+  background-image: radial-gradient(#E0E5D5 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+  color: var(--color-brand-brown);
+}

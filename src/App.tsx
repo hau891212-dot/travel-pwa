@@ -178,7 +178,9 @@ function App() {
             </div>
 
             {/* D. 行程時間軸模組 (傳入當前選中天數 1-7) */}
-            <ScheduleModule currentDay={selectedDay + 1} />
+            <ScheduleModule 
+             key={selectedDay} 
+            currentDay={selectedDay + 1} />
           </div>
         )}
 

@@ -6,10 +6,11 @@ import { BottomNav } from './components/BottomNav';
 import { TodoModule } from './components/TodoModule';
 import { ScheduleModule } from './components/ScheduleModule';
 import { WeatherSection } from './components/WeatherSection';
-import { BookingsModule } from './components/BookingsModule'; // 引入預訂模組
+import { BookingsModule } from './components/BookingsModule';
 import { db } from './services/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { differenceInSeconds, parseISO } from 'date-fns';
+import { differenceInSeconds, parseISO, addDays, format } from 'date-fns';
+import { zhTW } from 'date-fns/locale';
 
 // --- 跑秒倒數組件 ---
 const CounterNumber = ({ target, isReady }: { target: number, isReady: boolean }) => {
@@ -40,6 +41,7 @@ function App() {
     startDate: "2026-04-19T09:00"
   });
 
+  // 監聽 Firebase 資料
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, "settings", "trip"), (docSnap) => {
       if (docSnap.exists()) {
@@ -50,11 +52,13 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // 計時器
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // 計算倒數
   const calculateCountdown = () => {
     try {
       const target = parseISO(tripInfo.startDate);
@@ -71,22 +75,31 @@ function App() {
 
   const countdown = calculateCountdown();
 
+  // 自動生成一週日期 (Day 1 - 7)
+  const weekList = [...Array(7)].map((_, i) => {
+    try {
+      const date = addDays(parseISO(tripInfo.startDate), i);
+      return {
+        dayNum: i + 1,
+        dateStr: format(date, 'M/dd'),
+        weekday: format(date, 'eeee', { locale: zhTW }).replace('星期', ''),
+      };
+    } catch { return { dayNum: i + 1, dateStr: '0/00', weekday: '?' }; }
+  });
+
   return (
     <div className="min-h-screen pb-28">
+      {/* 1. 啟動畫面 */}
       <AnimatePresence>
         {isLoading && (
           <motion.div key="splash" exit={{ opacity: 0 }} className="fixed inset-0 z-[999] bg-brand-bg flex flex-col items-center justify-center">
-            <motion.div animate={{ y: [0, -20, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="text-brand-green text-7xl">
-              <FontAwesomeIcon icon={faPlane} />
-            </motion.div>
-            <div className="mt-12 bg-white px-8 py-3 rounded-full shadow-sticker border-2 border-[#E0E5D5] font-bold text-brand-brown">
-              雲端資料同步中...
-            </div>
+            <motion.div animate={{ y: [0, -20, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="text-brand-green text-7xl"><FontAwesomeIcon icon={faPlane} /></motion.div>
+            <div className="mt-12 bg-white px-8 py-3 rounded-full shadow-sticker border-2 border-[#E0E5D5] font-bold text-brand-brown">雲端資料同步中...</div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 固定頂部標題 */}
+      {/* 2. 固定標題與日期選單 (Sticky Header) */}
       <div className="sticky top-0 z-50 bg-brand-bg/70 backdrop-blur-xl border-b border-[#E0E5D5]/30">
         <header className="p-6 pb-2 flex justify-between items-start">
           <div>
@@ -99,14 +112,32 @@ function App() {
             ))}
           </div>
         </header>
+
+        {/* 橫向日期選擇器 (Day 1 - 7) */}
+        <div className="flex gap-3 overflow-x-auto pb-4 px-6 no-scrollbar">
+          {weekList.map((item, i) => (
+            <button
+              key={i}
+              onClick={() => setSelectedDay(i)}
+              className={`flex-shrink-0 w-16 h-20 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 ${
+                selectedDay === i ? 'bg-brand-blue text-white shadow-lg scale-105' : 'bg-white text-gray-400 border border-[#E0E5D5]/50'
+              }`}
+            >
+              <span className="text-[10px] font-black opacity-70 uppercase tracking-tighter">Day {item.dayNum}</span>
+              <span className="text-lg font-black tracking-tighter">{item.dateStr}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* 3. 主內容區 */}
       <main className="px-4 mt-6">
         {/* === 行程分頁 === */}
         {activeTab === 'schedule' && (
           <div className="space-y-6 animate-in fade-in duration-500">
             <WeatherSection startDate={tripInfo.startDate} />
             
+            {/* 倒數計時卡片 */}
             <div className="bg-brand-green rounded-4xl p-7 text-white shadow-xl shadow-green-100/50 relative overflow-hidden">
                <div className="relative z-10">
                  <div className="bg-white/10 backdrop-blur-sm px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase border border-white/20 inline-block mb-5">🛫 距離出發倒數</div>
@@ -124,6 +155,7 @@ function App() {
                <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/5 rounded-full pointer-events-none"></div>
             </div>
             
+            {/* 當日行程模組：加上 key 保證切換日期時畫面會刷新 */}
             <ScheduleModule key={selectedDay} currentDay={selectedDay + 1} />
           </div>
         )}
@@ -143,7 +175,7 @@ function App() {
           </div>
         )}
 
-        {/* === 其他頁面 === */}
+        {/* === 其他分頁佔位符 === */}
         {activeTab !== 'schedule' && activeTab !== 'planning' && activeTab !== 'bookings' && (
           <div className="text-center py-32 animate-pulse text-gray-300 font-bold uppercase tracking-widest text-xs">
             {activeTab} 頁面裝修中... 👷
@@ -151,6 +183,7 @@ function App() {
         )}
       </main>
 
+      {/* 4. 底部導覽列 */}
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
   );

@@ -41,7 +41,6 @@ function App() {
     startDate: "2026-04-19T09:00"
   });
 
-  // 監聽 Firebase 資料
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, "settings", "trip"), (docSnap) => {
       if (docSnap.exists()) {
@@ -52,13 +51,11 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // 計時器
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // 計算倒數
   const calculateCountdown = () => {
     try {
       const target = parseISO(tripInfo.startDate);
@@ -75,21 +72,18 @@ function App() {
 
   const countdown = calculateCountdown();
 
-  // 自動生成一週日期 (Day 1 - 7)
   const weekList = [...Array(7)].map((_, i) => {
     try {
       const date = addDays(parseISO(tripInfo.startDate), i);
       return {
         dayNum: i + 1,
         dateStr: format(date, 'M/dd'),
-        weekday: format(date, 'eeee', { locale: zhTW }).replace('星期', ''),
       };
-    } catch { return { dayNum: i + 1, dateStr: '0/00', weekday: '?' }; }
+    } catch { return { dayNum: i + 1, dateStr: '0/00' }; }
   });
 
   return (
     <div className="min-h-screen pb-28">
-      {/* 1. 啟動畫面 */}
       <AnimatePresence>
         {isLoading && (
           <motion.div key="splash" exit={{ opacity: 0 }} className="fixed inset-0 z-[999] bg-brand-bg flex flex-col items-center justify-center">
@@ -99,29 +93,29 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* 2. 固定標題 (不再包含日期選擇器) */}
+      {/* --- 修正後的 Sticky 區域：包含標題與日期選單 --- */}
       <div className="sticky top-0 z-50 bg-brand-bg/70 backdrop-blur-xl border-b border-[#E0E5D5]/30">
-        <header className="p-6 flex justify-between items-start">
+        <header className="p-6 pb-2 flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-black text-brand-text italic tracking-tighter">{tripInfo.title || "載入中..."}</h1>
             <p className="text-[#78B394] font-black mt-1 text-xs tracking-widest uppercase">🌸 {tripInfo.subtitle || "..."}</p>
           </div>
           <div className="flex -space-x-3 pt-1">
             {[1, 2, 3, 4].map(i => (
-              <img key={i} className="w-10 h-10 rounded-full border-2 border-white shadow-sm bg-gray-200" src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i + 12}`} alt="avatar" />
+              <img key={i} className="w-10 h-10 rounded-full border-2 border-white shadow-sm bg-gray-200" src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i + 15}`} alt="avatar" />
             ))}
           </div>
         </header>
-      </div>
 
-      {/* 3. 主內容區 */}
-      <main className="px-4 mt-2">
-        {/* === 行程分頁 (只有這裡會顯示日期) === */}
-        {activeTab === 'schedule' && (
-          <div className="space-y-6 animate-in fade-in duration-500">
-            
-            {/* 橫向日期選擇器：已移至行程分頁內部 */}
-            <div className="flex gap-3 overflow-x-auto pb-4 pt-2 no-scrollbar">
+        {/* 只有在行程分頁時，這一段日期才會顯現並被固定住 */}
+        <AnimatePresence>
+          {activeTab === 'schedule' && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="flex gap-3 overflow-x-auto pb-4 px-6 no-scrollbar"
+            >
               {weekList.map((item, i) => (
                 <button
                   key={i}
@@ -134,8 +128,14 @@ function App() {
                   <span className="text-lg font-black tracking-tighter">{item.dateStr}</span>
                 </button>
               ))}
-            </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
+      <main className="px-4 mt-6">
+        {activeTab === 'schedule' && (
+          <div className="space-y-6 animate-in fade-in duration-500">
             <WeatherSection startDate={tripInfo.startDate} />
             
             <div className="bg-brand-green rounded-4xl p-7 text-white shadow-xl shadow-green-100/50 relative overflow-hidden">
@@ -159,25 +159,16 @@ function App() {
           </div>
         )}
 
-        {/* === 預訂分頁 === */}
         {activeTab === 'bookings' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pt-4">
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
              <BookingsModule />
           </div>
         )}
 
-        {/* === 準備分頁 === */}
         {activeTab === 'planning' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 p-2 pt-4">
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 p-2">
              <div className="flex items-center gap-2 mb-6"><div className="w-2 h-6 bg-brand-green rounded-full"></div><h2 className="text-2xl font-black text-brand-text italic uppercase">準備清單 📝</h2></div>
              <TodoModule /> 
-          </div>
-        )}
-
-        {/* === 其他頁面 === */}
-        {activeTab !== 'schedule' && activeTab !== 'planning' && activeTab !== 'bookings' && (
-          <div className="text-center py-32 animate-pulse text-gray-300 font-bold uppercase tracking-widest text-xs">
-            {activeTab} 頁面裝修中... 👷
           </div>
         )}
       </main>

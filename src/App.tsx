@@ -1,3 +1,17 @@
+// 1. 在 App.tsx 最上方匯入
+import { BookingsModule } from './components/BookingsModule';
+
+// ... 
+
+// 2. 在 main 區域找到 activeTab === 'bookings' 的位置
+{activeTab === 'bookings' && (
+  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+    {/* 為了美觀，我們給這個分頁一點頂部間距 */}
+    <div className="pt-2">
+      <BookingsModule />
+    </div>
+  </div>
+)}
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';

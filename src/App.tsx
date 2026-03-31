@@ -1,17 +1,3 @@
-// 1. 在 App.tsx 最上方匯入
-import { BookingsModule } from './components/BookingsModule';
-
-// ... 
-
-// 2. 在 main 區域找到 activeTab === 'bookings' 的位置
-{activeTab === 'bookings' && (
-  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-    {/* 為了美觀，我們給這個分頁一點頂部間距 */}
-    <div className="pt-2">
-      <BookingsModule />
-    </div>
-  </div>
-)}
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -20,11 +6,12 @@ import { BottomNav } from './components/BottomNav';
 import { TodoModule } from './components/TodoModule';
 import { ScheduleModule } from './components/ScheduleModule';
 import { WeatherSection } from './components/WeatherSection';
+import { BookingsModule } from './components/BookingsModule'; // 引入預訂模組
 import { db } from './services/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { differenceInSeconds, parseISO, addDays, format } from 'date-fns';
-import { zhTW } from 'date-fns/locale';
+import { differenceInSeconds, parseISO } from 'date-fns';
 
+// --- 跑秒倒數組件 ---
 const CounterNumber = ({ target, isReady }: { target: number, isReady: boolean }) => {
   const [displayValue, setDisplayValue] = useState(100);
   useEffect(() => {
@@ -84,29 +71,22 @@ function App() {
 
   const countdown = calculateCountdown();
 
-  // 生成日期列表
-  const weekList = [...Array(7)].map((_, i) => {
-    const date = addDays(parseISO(tripInfo.startDate), i);
-    return {
-      dayNum: i + 1,
-      dateStr: format(date, 'M/dd'),
-      weekday: format(date, 'eeee', { locale: zhTW }).replace('星期', ''),
-    };
-  });
-
   return (
     <div className="min-h-screen pb-28">
-      {/* 啟動畫面 */}
       <AnimatePresence>
         {isLoading && (
           <motion.div key="splash" exit={{ opacity: 0 }} className="fixed inset-0 z-[999] bg-brand-bg flex flex-col items-center justify-center">
-            <motion.div animate={{ y: [0, -20, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="text-brand-green text-7xl"><FontAwesomeIcon icon={faPlane} /></motion.div>
-            <div className="mt-12 bg-white px-8 py-3 rounded-full shadow-sticker border-2 border-[#E0E5D5] font-bold text-brand-brown">雲端資料同步中...</div>
+            <motion.div animate={{ y: [0, -20, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="text-brand-green text-7xl">
+              <FontAwesomeIcon icon={faPlane} />
+            </motion.div>
+            <div className="mt-12 bg-white px-8 py-3 rounded-full shadow-sticker border-2 border-[#E0E5D5] font-bold text-brand-brown">
+              雲端資料同步中...
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* --- 這裡開始是關鍵：固定標題與日期選單 --- */}
+      {/* 固定頂部標題 */}
       <div className="sticky top-0 z-50 bg-brand-bg/70 backdrop-blur-xl border-b border-[#E0E5D5]/30">
         <header className="p-6 pb-2 flex justify-between items-start">
           <div>
@@ -119,28 +99,13 @@ function App() {
             ))}
           </div>
         </header>
-
-        {/* 橫向日期選擇器也放在 Sticky 區域內 */}
-        <div className="flex gap-3 overflow-x-auto pb-4 px-6 no-scrollbar">
-          {weekList.map((item, i) => (
-            <button
-              key={i}
-              onClick={() => setSelectedDay(i)}
-              className={`flex-shrink-0 w-16 h-20 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 ${
-                selectedDay === i ? 'bg-brand-blue text-white shadow-lg scale-105' : 'bg-white text-gray-400 border border-[#E0E5D5]/50'
-              }`}
-            >
-              <span className="text-[10px] font-black opacity-70 uppercase">第 {item.dayNum} 天</span>
-              <span className="text-lg font-black tracking-tighter">{item.dateStr}</span>
-            </button>
-          ))}
-        </div>
       </div>
 
       <main className="px-4 mt-6">
+        {/* === 行程分頁 === */}
         {activeTab === 'schedule' && (
           <div className="space-y-6 animate-in fade-in duration-500">
-            <WeatherSection />
+            <WeatherSection startDate={tripInfo.startDate} />
             
             <div className="bg-brand-green rounded-4xl p-7 text-white shadow-xl shadow-green-100/50 relative overflow-hidden">
                <div className="relative z-10">
@@ -163,10 +128,25 @@ function App() {
           </div>
         )}
 
+        {/* === 預訂分頁 === */}
+        {activeTab === 'bookings' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <BookingsModule />
+          </div>
+        )}
+
+        {/* === 準備分頁 === */}
         {activeTab === 'planning' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 p-2">
              <div className="flex items-center gap-2 mb-6"><div className="w-2 h-6 bg-brand-green rounded-full"></div><h2 className="text-2xl font-black text-brand-text italic uppercase">準備清單 📝</h2></div>
              <TodoModule /> 
+          </div>
+        )}
+
+        {/* === 其他頁面 === */}
+        {activeTab !== 'schedule' && activeTab !== 'planning' && activeTab !== 'bookings' && (
+          <div className="text-center py-32 animate-pulse text-gray-300 font-bold uppercase tracking-widest text-xs">
+            {activeTab} 頁面裝修中... 👷
           </div>
         )}
       </main>

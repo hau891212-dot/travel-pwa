@@ -4,7 +4,7 @@ import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, d
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPen, faListUl, faCamera, faUsers, faCoins, faStore, faTrashAlt } from '@fortawesome/free-solid-svg-icons';
+import { faPen, faListUl, faCamera, faCoins, faStore, faTrashAlt, faCheckCircle, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { format } from 'date-fns';
 
 export const ExpenseModule = () => {
@@ -23,10 +23,9 @@ export const ExpenseModule = () => {
     imageUrl: ''
   });
 
-  const JPY_RATE = 0.215; // 預設日幣匯率
+  const JPY_RATE = 0.215;
 
   useEffect(() => {
-    // 監聽成員與帳務
     const unsubM = onSnapshot(collection(db, "members"), (s) => setMembers(s.docs.map(d => ({id: d.id, ...d.data()}))));
     const q = query(collection(db, "expenses"), orderBy("date", "desc"), orderBy("createdAt", "desc"));
     const unsubE = onSnapshot(q, (s) => setExpenses(s.docs.map(d => ({id: d.id, ...d.data()}))));
@@ -37,11 +36,16 @@ export const ExpenseModule = () => {
     const file = e.target.files[0];
     if (!file) return;
     setLoading(true);
-    const sRef = ref(storage, `receipts/${Date.now()}`);
-    await uploadBytes(sRef, file);
-    const url = await getDownloadURL(sRef);
-    setForm({...form, imageUrl: url});
-    setLoading(false);
+    try {
+      const sRef = ref(storage, `receipts/${Date.now()}_${file.name}`);
+      const snap = await uploadBytes(sRef, file);
+      const url = await getDownloadURL(snap.ref);
+      setForm({ ...form, imageUrl: url });
+    } catch (err) {
+      alert("照片上傳失敗");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAdd = async () => {
@@ -57,7 +61,7 @@ export const ExpenseModule = () => {
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="flex bg-white rounded-full p-1 shadow-sm border border-[#E0E5D5] mx-2">
+      <div className="flex bg-white rounded-full p-1 shadow-sm border border-[#E0E5D5] mx-2 mt-4">
         <button onClick={() => setSubTab('entry')} className={`flex-1 py-3 rounded-full text-xs font-black transition-all ${subTab === 'entry' ? 'bg-brand-green text-white shadow-md' : 'text-gray-400'}`}><FontAwesomeIcon icon={faPen} className="mr-2"/>記帳</button>
         <button onClick={() => setSubTab('details')} className={`flex-1 py-3 rounded-full text-xs font-black transition-all ${subTab === 'details' ? 'bg-brand-green text-white shadow-md' : 'text-gray-400'}`}><FontAwesomeIcon icon={faListUl} className="mr-2"/>明細</button>
       </div>
@@ -77,18 +81,26 @@ export const ExpenseModule = () => {
                 <input type="number" placeholder="金額" className="bg-[#F7F4EB] p-4 rounded-2xl font-black text-2xl" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} />
                 <div className="bg-gray-50 p-4 rounded-2xl font-black text-2xl text-gray-300">≈ {form.currency === 'JPY' ? Math.round(Number(form.amount) * JPY_RATE) : form.amount}</div>
               </div>
+
+              {/* 預覽與上傳區 */}
               <div className="flex gap-2">
                 <input placeholder="消費項目 (例如: 晚餐)" className="flex-1 bg-[#F7F4EB] p-4 rounded-2xl font-bold" value={form.item} onChange={e => setForm({...form, item: e.target.value})} />
-                <label className="w-14 h-14 bg-brand-green/10 rounded-2xl flex items-center justify-center text-brand-green cursor-pointer"><input type="file" className="hidden" onChange={handleUpload}/><FontAwesomeIcon icon={faCamera}/></label>
+                <label className="w-14 h-14 bg-brand-green/10 rounded-2xl flex items-center justify-center text-brand-green cursor-pointer relative overflow-hidden border-2 border-brand-green/20">
+                  {loading ? <FontAwesomeIcon icon={faSpinner} className="animate-spin" /> : 
+                   form.imageUrl ? <img src={form.imageUrl} className="w-full h-full object-cover" /> : <FontAwesomeIcon icon={faCamera}/>}
+                  <input type="file" className="hidden" onChange={handleUpload}/>
+                </label>
               </div>
+
+              {/* 付款人選擇 */}
               <div className="flex gap-3 overflow-x-auto py-2 no-scrollbar">
                 {members.map(m => (
                   <button key={m.id} onClick={() => setForm({...form, payerId: m.id, payerName: m.name})} className={`flex-shrink-0 flex flex-col items-center gap-1 transition-all ${form.payerId === m.id ? 'scale-110' : 'opacity-40 grayscale'}`}>
-                    <img src={m.avatar} className="w-12 h-12 rounded-full border-2 border-brand-green" /><span className="text-[10px] font-bold">{m.name}</span>
+                    <img src={m.avatar} className="w-12 h-12 rounded-full border-2 border-brand-green" /><span className="text-[10px] font-black">{m.name}</span>
                   </button>
                 ))}
               </div>
-              <button onClick={handleAdd} className="w-full bg-brand-green text-white font-black py-5 rounded-3xl shadow-lg active:scale-95">完成記帳</button>
+              <button onClick={handleAdd} className="w-full bg-brand-green text-white font-black py-5 rounded-3xl shadow-lg active:scale-95 transition-all">完成記帳</button>
             </div>
           </motion.div>
         ) : (
@@ -100,9 +112,11 @@ export const ExpenseModule = () => {
             </div>
             <div className="space-y-3">
                {expenses.map(exp => (
-                 <div key={exp.id} className="bg-white p-4 rounded-[2rem] shadow-sm border-2 border-[#F0EEE6] flex justify-between items-center">
+                 <div key={exp.id} className="bg-white p-4 rounded-[2rem] shadow-sm border-2 border-[#F0EEE6] flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                       <div className="w-12 h-12 bg-[#F7F4EB] rounded-full flex items-center justify-center overflow-hidden">{exp.imageUrl ? <img src={exp.imageUrl} className="w-full h-full object-cover" /> : <FontAwesomeIcon icon={faStore} className="text-gray-200" />}</div>
+                       <div className="w-12 h-12 bg-[#F7F4EB] rounded-full flex items-center justify-center overflow-hidden border border-gray-100">
+                          {exp.imageUrl ? <img src={exp.imageUrl} className="w-full h-full object-cover" /> : <FontAwesomeIcon icon={faStore} className="text-gray-200" />}
+                       </div>
                        <div><p className="font-black text-brand-brown">{exp.item}</p><p className="text-[10px] text-gray-400 font-bold">{exp.payerName} · {exp.date}</p></div>
                     </div>
                     <div className="text-right">

@@ -1,32 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlane, faClock, faWalking, faChevronRight } from '@fortawesome/free-solid-svg-icons';
+import { faPlane, faClock, faWalking, faChevronRight, faUsers } from '@fortawesome/free-solid-svg-icons';
 import { BottomNav } from './components/BottomNav';
 import { TodoModule } from './components/TodoModule';
 import { ScheduleModule } from './components/ScheduleModule';
 import { WeatherSection } from './components/WeatherSection';
 import { BookingsModule } from './components/BookingsModule';
 import { ExpenseModule } from './components/ExpenseModule';
+import { MembersModule } from './components/MembersModule'; // 引入成員模組
 import { db } from './services/firebase';
 import { doc, onSnapshot, collection, query, where, orderBy, limit } from 'firebase/firestore';
 import { differenceInSeconds, parseISO, addDays, format, isAfter } from 'date-fns';
 
-// --- 進階曲線跑秒組件 (400 -> Target, 前快後慢) ---
+// --- 跑秒組件 (400 -> Target) ---
 const CounterNumber = ({ target, isReady }: { target: number, isReady: boolean }) => {
-  const count = useMotionValue(400); // 從 400 開始
+  const count = useMotionValue(400);
   const rounded = useTransform(count, (latest) => Math.round(latest));
-
   useEffect(() => {
-    if (isReady) {
-      // 4秒內完成動畫，使用 easeOut 達成前快後慢的效果
-      animate(count, target, { 
-        duration: 4, 
-        ease: [0.16, 1, 0.3, 1], // 自定義減速曲線
-      });
-    }
+    if (isReady) animate(count, target, { duration: 4, ease: [0.16, 1, 0.3, 1] });
   }, [target, isReady]);
-
   return <motion.span style={{ paddingRight: '0.1em' }}>{rounded}</motion.span>;
 };
 
@@ -37,22 +30,30 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [tripInfo, setTripInfo] = useState({ title: "", subtitle: "", startDate: "2026-04-19T09:00" });
+  const [members, setMembers] = useState<any[]>([]);
 
+  // 1. 監聽 Firebase 資料
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "settings", "trip"), (snap) => {
+    const unsubTrip = onSnapshot(doc(db, "settings", "trip"), (snap) => {
       if (snap.exists()) {
         setTripInfo(snap.data() as any);
-        setTimeout(() => setIsLoading(false), 1200); // 縮短載入等待
+        setTimeout(() => setIsLoading(false), 1200);
       }
     });
-    return () => unsub();
+    // 同時監聽成員，用於頂部頭像列
+    const unsubMembers = onSnapshot(query(collection(db, "members"), where("isDeleted", "==", false)), (snap) => {
+      setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsubTrip(); unsubMembers(); };
   }, []);
 
+  // 2. 每秒更新計時器
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // 3. 監聽當前行程提示
   useEffect(() => {
     if (isLoading) return;
     const currentTimeStr = format(now, 'HH:mm');
@@ -78,7 +79,6 @@ function App() {
   };
 
   const timer = calculateCountdown();
-
   const weekList = [...Array(7)].map((_, i) => {
     try {
       const date = addDays(parseISO(tripInfo.startDate), i);
@@ -88,17 +88,29 @@ function App() {
 
   return (
     <div className="min-h-screen pb-28">
+      {/* 啟動畫面 */}
       <AnimatePresence>{isLoading && (
         <motion.div key="splash" exit={{ opacity: 0, y: -20 }} className="fixed inset-0 z-[3000] bg-brand-bg flex flex-col items-center justify-center">
-          <motion.div animate={{ y: [0, -20, 0] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }} className="text-brand-green text-8xl"><FontAwesomeIcon icon={faPlane} /></motion.div>
+          <motion.div animate={{ y: [0, -25, 0] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }} className="text-brand-green text-8xl"><FontAwesomeIcon icon={faPlane} /></motion.div>
           <div className="mt-12 bg-white px-8 py-3 rounded-full shadow-sticker border-2 border-[#E0E5D5] font-black text-brand-brown tracking-widest text-sm uppercase">雲端資料同步中...</div>
         </motion.div>
       )}</AnimatePresence>
 
+      {/* 固定頂部標題與真實成員頭像 */}
       <div className="sticky top-0 z-50 bg-brand-bg/70 backdrop-blur-xl border-b border-[#E0E5D5]/30">
         <header className="p-6 pb-2 flex justify-between items-start">
-          <div><h1 className="text-3xl font-black text-brand-text italic tracking-tighter">{tripInfo.title || "..."}</h1><p className="text-[#78B394] font-black mt-1 text-xs tracking-widest uppercase">🌸 {tripInfo.subtitle}</p></div>
-          <div className="flex -space-x-3 pt-1">{[1, 2, 3, 4].map(i => (<img key={i} className="w-10 h-10 rounded-full border-2 border-white shadow-sm bg-gray-200" src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i + 300}`} />))}</div>
+          <div>
+            <h1 className="text-3xl font-black text-brand-text italic tracking-tighter">{tripInfo.title || "..."}</h1>
+            <p className="text-[#78B394] font-black mt-1 text-xs tracking-widest uppercase">🌸 {tripInfo.subtitle}</p>
+          </div>
+          <div className="flex -space-x-3 pt-1">
+            {members.slice(0, 4).map(m => (
+              <img key={m.id} className="w-10 h-10 rounded-full border-2 border-white shadow-sm bg-white object-cover" src={m.avatar} alt={m.name} />
+            ))}
+            {members.length > 4 && (
+              <div className="w-10 h-10 rounded-full border-2 border-white bg-brand-yellow flex items-center justify-center text-[10px] font-black text-brand-brown shadow-sm">+{members.length - 4}</div>
+            )}
+          </div>
         </header>
         <AnimatePresence>{activeTab === 'schedule' && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="flex gap-3 overflow-x-auto pb-4 px-6 no-scrollbar">
@@ -109,25 +121,21 @@ function App() {
         )}</AnimatePresence>
       </div>
 
+      {/* 主要分頁切換 */}
       <main className="px-4 mt-2">
         {activeTab === 'schedule' && (
           <div className="space-y-6 animate-in fade-in duration-500">
             <WeatherSection startDate={tripInfo.startDate} />
             <AnimatePresence mode="wait">
               {!timer.isStarted ? (
-                <motion.div key="countdown" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -20 }} className="bg-brand-green rounded-4xl p-7 text-white shadow-xl shadow-green-100/50 relative overflow-hidden mx-1">
+                <motion.div key="countdown" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="bg-brand-green rounded-4xl p-7 text-white shadow-xl relative overflow-hidden mx-1">
                    <div className="relative z-10 flex justify-between items-center">
                      <div>
                        <div className="bg-white/10 backdrop-blur-sm px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase border border-white/20 inline-block mb-4">距離出發倒數</div>
-                       <div className="w-32 h-2 bg-black/10 rounded-full overflow-hidden">
-                        <motion.div initial={{ width: 0 }} animate={!isLoading ? { width: `${timer.percent}%` } : { width: 0 }} transition={{ duration: 4, ease: "easeOut" }} className="h-full bg-white/50 rounded-full" />
-                       </div>
+                       <div className="w-32 h-2 bg-black/10 rounded-full overflow-hidden"><motion.div initial={{ width: 0 }} animate={!isLoading ? { width: `${timer.percent}%` } : { width: 0 }} transition={{ duration: 4 }} className="h-full bg-white/50 rounded-full" /></div>
                      </div>
-                     <div className="text-right">
-                       <div className="text-5xl font-black italic tracking-tighter leading-none flex items-baseline justify-end">
-                         <CounterNumber target={timer.h!} isReady={!isLoading} />
-                         <span className="text-xl ml-1 not-italic opacity-80 font-black">H</span>
-                       </div>
+                     <div className="text-right leading-none">
+                       <div className="text-5xl font-black italic tracking-tighter flex items-baseline justify-end"><CounterNumber target={timer.h!} isReady={!isLoading} /><span className="text-xl ml-1 not-italic opacity-80">H</span></div>
                        <p className="text-[10px] font-black opacity-70 tracking-widest uppercase mt-1">{timer.m}M {timer.s}S REMAINING</p>
                      </div>
                    </div>
@@ -137,9 +145,9 @@ function App() {
                 <motion.div key="live" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2.5rem] p-5 shadow-sticker border-2 border-brand-yellow flex items-center justify-between mx-1">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 bg-brand-yellow rounded-2xl flex items-center justify-center text-brand-brown text-2xl shadow-inner"><FontAwesomeIcon icon={faWalking} className="animate-bounce" /></div>
-                    <div><p className="text-[10px] font-black text-brand-yellow uppercase tracking-widest">NEXT ACTIVITY</p><h3 className="text-xl font-black text-brand-brown">{currentEvent ? currentEvent.title : "行程順利結束囉！"}</h3>{currentEvent && <p className="text-xs font-bold text-gray-400 mt-0.5">{currentEvent.time} 開始</p>}</div>
+                    <div><p className="text-[10px] font-black text-brand-yellow uppercase tracking-widest">NEXT ACTIVITY</p><h3 className="text-xl font-black text-brand-brown">{currentEvent ? currentEvent.title : "今天的行程結束囉！"}</h3>{currentEvent && <p className="text-xs font-bold text-gray-400 mt-0.5">{currentEvent.time} 開始</p>}</div>
                   </div>
-                  <div className="bg-[#F7F4EB] w-10 h-10 rounded-full flex items-center justify-center text-brand-yellow"><FontAwesomeIcon icon={faChevronRight} /></div>
+                  <div className="bg-[#F7F4EB] w-10 h-10 rounded-full flex items-center justify-center text-brand-yellow active:scale-90 transition-all"><FontAwesomeIcon icon={faChevronRight} /></div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -147,7 +155,7 @@ function App() {
           </div>
         )}
 
-        {/* 移除了原本的標題標籤，讓版面更乾淨 */}
+        {activeTab === 'members' && <div className="animate-in fade-in duration-500"><MembersModule /></div>}
         {activeTab === 'expense' && <div className="animate-in fade-in duration-500"><ExpenseModule /></div>}
         {activeTab === 'bookings' && <div className="animate-in fade-in duration-500"><BookingsModule /></div>}
         {activeTab === 'planning' && <div className="animate-in fade-in duration-500 p-2"><TodoModule /></div>}

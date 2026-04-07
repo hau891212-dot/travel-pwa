@@ -13,12 +13,20 @@ import { db } from './services/firebase';
 import { doc, onSnapshot, collection, query, where, orderBy, limit } from 'firebase/firestore';
 import { differenceInSeconds, parseISO, addDays, format, isAfter } from 'date-fns';
 
+// --- 跑秒倒數組件 (400 -> Target, 前快後慢) ---
 const CounterNumber = ({ target, isReady }: { target: number, isReady: boolean }) => {
   const count = useMotionValue(400);
   const rounded = useTransform(count, (latest) => Math.round(latest));
+
   useEffect(() => {
-    if (isReady) animate(count, target, { duration: 4, ease: [0.16, 1, 0.3, 1] });
-  }, [target, isReady]);
+    if (isReady) {
+      animate(count, target, { 
+        duration: 4, 
+        ease: [0.16, 1, 0.3, 1], 
+      });
+    }
+  }, [target, isReady, count]);
+
   return <motion.span style={{ paddingRight: '0.05em' }}>{rounded}</motion.span>;
 };
 
@@ -49,6 +57,17 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (isLoading) return;
+    const currentTimeStr = format(now, 'HH:mm');
+    const q = query(collection(db, "schedule"), where("day", "==", selectedDay + 1), where("time", ">=", currentTimeStr), orderBy("time", "asc"), limit(1));
+    const unsubEvent = onSnapshot(q, (snap) => {
+      if (!snap.empty) setCurrentEvent(snap.docs[0].data());
+      else setCurrentEvent(null);
+    });
+    return () => unsubEvent();
+  }, [selectedDay, now, isLoading]);
+
   const calculateCountdown = () => {
     try {
       const target = parseISO(tripInfo.startDate);
@@ -64,15 +83,17 @@ function App() {
 
   const timer = calculateCountdown();
   const weekList = [...Array(7)].map((_, i) => {
-    const date = addDays(parseISO(tripInfo.startDate), i);
-    return { dayNum: i + 1, dateStr: format(date, 'M/dd') };
+    try {
+      const date = addDays(parseISO(tripInfo.startDate), i);
+      return { dayNum: i + 1, dateStr: format(date, 'M/dd') };
+    } catch { return { dayNum: i + 1, dateStr: '0/00' }; }
   });
 
   return (
     <div className="min-h-screen pb-28">
       <AnimatePresence>{isLoading && (
-        <motion.div key="splash" exit={{ opacity: 0 }} className="fixed inset-0 z-[3000] bg-brand-bg flex flex-col items-center justify-center">
-          <motion.div animate={{ y: [0, -20, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="text-brand-green text-8xl"><FontAwesomeIcon icon={faPlane} /></motion.div>
+        <motion.div key="splash" exit={{ opacity: 0, y: -20 }} className="fixed inset-0 z-[3000] bg-brand-bg flex flex-col items-center justify-center">
+          <motion.div animate={{ y: [0, -20, 0] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }} className="text-brand-green text-8xl shadow-2xl"><FontAwesomeIcon icon={faPlane} /></motion.div>
           <div className="mt-12 bg-white px-8 py-3 rounded-full shadow-sticker border-2 border-[#E0E5D5] font-black text-brand-brown tracking-widest text-sm uppercase">雲端資料同步中...</div>
         </motion.div>
       )}</AnimatePresence>
